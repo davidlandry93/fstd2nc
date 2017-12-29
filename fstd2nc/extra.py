@@ -20,10 +20,41 @@
 
 """
 Optional helper functions.
-Note: These rely on some assumptions about the internal structures of librmn,
-      and may fail for future libray verisons.
-      These have been tested for librmn 15.2 and 16.2.
+Note: These rely on some assumptions about the internal structures of librmn
+      and python-netCDF4, and may fail for future libray verisons.
+      These have been tested for librmn 15.2 and 16.2, and
+      python-netCDF4 1.2.9
 """
+
+# Replace _StartCountStride routine so it doesn't take a ridiculous amount of time.
+from netCDF4.utils import _StartCountStride as old_StartCountStride
+def _StartCountStride(elem, shape, dimensions=None, grp=None, datashape=None,\
+        put=False):
+  import numpy as np
+  start = np.array(elem+(0,)*(len(shape)-len(elem)))
+  count = np.array((1,)*(len(shape)-len(datashape))+datashape)
+  stride = np.array((1,)*len(shape))
+  indices = np.array((-1,)*(len(shape)-len(datashape)) + (slice(None),)*len(datashape))
+  start = start.reshape((1,)*(len(shape)-start.ndim+1)+(-1,))
+  count = count.reshape((1,)*(len(shape)-count.ndim+1)+(-1,))
+  stride = stride.reshape((1,)*(len(shape)-stride.ndim+1)+(-1,))
+  indices = indices.reshape((1,)*(len(shape)-indices.ndim+1)+(-1,))
+  return start, count, stride, indices
+
+def patch_netcdf4():
+  """
+  Apply some patches to netCDF4 to make I/O a bit faster.
+  """
+  from netCDF4 import _netCDF4
+  _netCDF4._StartCountStride = _StartCountStride
+
+def unpatch_netcdf4():
+  """
+  Restore netCDF4 to the original version (remove custom patches).
+  """
+  from netCDF4 import _netCDF4
+  _netCDF4._StartCountStride = old_StartCountStride
+
 
 from ctypes import Structure, POINTER, c_void_p, c_uint32, c_int32, c_int, c_uint, c_byte, c_char_p
 from rpnpy.librmn import librmn

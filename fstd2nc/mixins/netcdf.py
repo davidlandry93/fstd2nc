@@ -86,9 +86,11 @@ class netCDF_Atts (BufferBase):
 class netCDF_IO (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
+    from argparse import SUPPRESS
     super(netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units for the output time axis.  Default is %(default)s.'))
     parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the output time axis.  The default is the starting date in the RPN file.'))
+    parser.add_argument('--no-quick-netcdf', action='store_true', help=SUPPRESS)
 
   @classmethod
   def _check_args (cls, parser, args):
@@ -105,6 +107,7 @@ class netCDF_IO (BufferBase):
     self._time_units = kwargs.pop('time_units','hours')
     self._reference_date = kwargs.pop('reference_date',None)
     self._unique_names = kwargs.pop('unique_names',True)
+    self._quick_netcdf = not kwargs.pop('no_quick_netcdf',False)
     super(netCDF_IO,self).__init__(*args,**kwargs)
 
   def _iter (self):
@@ -252,6 +255,7 @@ class netCDF_IO (BufferBase):
     Requires the netCDF4 package.
     """
     from fstd2nc.mixins import _var_type, _ProgressBar, _FakeBar
+    from fstd2nc.extra import patch_netcdf4, unpatch_netcdf4
     from netCDF4 import Dataset
     import numpy as np
     f = Dataset(filename, "w", format=nc_format)
@@ -312,6 +316,9 @@ class netCDF_IO (BufferBase):
         if r >= 0:
           io.append((r,record_shape,v,ind))
 
+    if self._quick_netcdf:
+      patch_netcdf4()
+
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
@@ -324,6 +331,10 @@ class netCDF_IO (BufferBase):
       except (IndexError,ValueError):
         warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
         continue
+
+    if self._quick_netcdf:
+      unpatch_netcdf4()
+
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
     f.Conventions = "CF-1.6"
